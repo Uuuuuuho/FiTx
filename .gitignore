@@ -1,2 +1,7 @@
 compile_commands.json
 .clangd/
+linux/
+build/
+log/
+scripts/
+build_log.txt

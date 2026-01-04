@@ -10,3 +10,13 @@ services:
       args:
         - project_path=${FITX_ROOT}
         - linux_path=${LINUX_ROOT}
+    environment:
+      - FITX_ROOT=/opt/fitx
+      - LINUX_ROOT=/linux
+    volumes:
+      # mount repository to the container FITX_ROOT
+      - ./:/opt/fitx
+      # mount host linux tree (place kernel sources at ./linux on host)
+      - ./linux:/linux
+    working_dir: /opt/fitx
+    command: tail -f /dev/null
