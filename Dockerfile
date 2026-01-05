@@ -7,7 +7,7 @@ RUN apt-get -qq update && \
         autoconf automake cmake dpkg-dev file make patch libc6-dev git \
         fakeroot build-essential ncurses-dev xz-utils libssl-dev bc flex \
         libelf-dev bison python3 python3-pip cpio python3-dev \
-        clang-14 clang-tidy-14 clang-format-14 libc++-14-dev libc++abi-14-dev llvm-14-dev && \
+        clang-14 clang-tidy-14 clang-format-14 libc++-14-dev libc++abi-14-dev llvm-14-dev less && \
     for f in /usr/lib/llvm-14/bin/*; do ln -sf "$f" /usr/bin/; done && \
     ln -sf clang-14 /usr/bin/cc && \
     ln -sf clang-14 /usr/bin/c89 && \

@@ -7,5 +7,6 @@ docker run -d --name FiTx \
   -e LINUX_ROOT=${LINUX_ROOT} \
   -v /Users/yuho/workspace/FiTx:${FITX_ROOT} \
   -v /Users/yuho/workspace/FiTx/linux:${LINUX_ROOT} \
+  -v /Users/yuho/workspace:/workspace \
   --privileged \
   fitx:latest tail -f /dev/null
