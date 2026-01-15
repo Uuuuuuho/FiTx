@@ -3,7 +3,8 @@ from pathlib import Path
 import typing
 
 ### CONSTANTS ###
-CLANG = "clang"
+# Prefer environment overrides so host builds can point directly to clang-14
+CLANG = os.environ.get("CLANG", os.environ.get("HOSTCC", os.environ.get("CC", "clang-14")))
 
 
 ### Util Functions ###
