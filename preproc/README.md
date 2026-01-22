@@ -1,80 +1,76 @@
-# FiTx Preproc Prototype: Symbolic Branch Lowering
+# FiTx Preproc Pipeline (C++/LLVM)
 
-This prototype builds a pipeline that:
-1. Parses variational C source with `#ifdef/#ifndef/#else/#endif`.
-2. Computes presence conditions (PC) and annotates source.
-3. Lowers `#ifdef` blocks into explicit symbolic branches, keeping both sides.
-4. Emits LLVM IR for a **baseline** build (preprocessor deletes code) and a **symbolic** build (both branches kept).
-5. Compares IR to highlight differences in call sites, struct layouts, and availability.
+This directory provides a C++/LLVM-based prototype pipeline for symbolic branch lowering of variational C code with `#ifdef` directives. It builds C++ tools, runs PC (Presence Condition) propagation and symbolic lowering, emits LLVM IR, and compares baseline vs symbolic IR outputs.
 
-## Directory Layout
+## Directory Structure
 
 ```
 preproc/
+  build.sh
+  run_test.sh
+  build/
+    emit_ir
+    ir_summary
+    pc_propagation_clang
+    symbolic_lowering_clang
+  src/
+    emit_ir.cpp
+    ir_summary.cpp
+    pc_propagation_clang.cpp
+    symbolic_lowering_clang.cpp
   test/
     example1_alloc_free.c
     example2_branch.c
     example3_struct.c
     example4_function.c
     example5_macro.c
-  src/
-    pc_propagation_clang.cpp
-    symbolic_lowering_clang.cpp
-    emit_ir.cpp
-    ir_summary.cpp    
-  build.sh
-  run_tests.sh
-  README.md
 ```
 
-## Pipeline Overview
+## Tools
 
-- **PC propagation** (`src/pc_propagation_clang`): Adds `// PC: ...` markers to show active conditions using Clang frontend callbacks.
-- **Symbolic lowering** (`src/symbolic_lowering_clang`): Rewrites `#ifdef` blocks to `if (__cfg("MACRO"))` branches and inserts `PC_ANNOTATE("PC: ...")` markers using Clang frontend callbacks.
-- **LLVM IR emission** (`src/emit_ir`): Uses `EmitLLVMOnlyAction` from Clang to emit LLVM IR.
-- **IR summary** (`src/ir_summary`): Parses IR via LLVM API (`IRReader`).
+- `pc_propagation_clang`: Uses Clang frontend callbacks to compute presence conditions and annotate source with `// PC:` markers.
+- `symbolic_lowering_clang`: Lowers `#ifdef` blocks into explicit symbolic branches while keeping both sides.
+- `emit_ir`: Emits LLVM IR via Clang frontend and writes `.ll` files.
+- `ir_summary`: Reads LLVM IR via LLVM API and summarizes functions/structs/calls.
 
-## Example Categories Covered
-
-1. Call-site + alloc/free variation (`example1_alloc_free.c`)
-2. Branch/control variation (`example2_branch.c`)
-3. Struct field variation (`example3_struct.c`)
-4. Function availability (`example4_function.c`)
-5. Macro wrapper variability (`example5_macro.c`)
-
-## How to Run
+## Build and Run
 
 ### Build a single example
 
 ```bash
 cd /home/yqc5929/data_workspace/FiTx/preproc
-./build.sh
+./build.sh test/example1_alloc_free.c out/example1_alloc_free CONFIG_USB
 ```
 
-Artifacts are created in `out/example1_alloc_free/`:
-- `*_baseline.ll`: baseline IR (preprocessor deletes non-selected branches)
+Outputs in `out/example1_alloc_free/`:
+- `*_baseline.ll`: IR from normal preprocessing
 - `*_pc.c`: PC-annotated source
 - `*_symbolic.c`: lowered symbolic source
-- `*_symbolic.ll`: symbolic IR (both branches kept)
+- `*_symbolic.ll`: symbolic IR
 
-### Run all examples
+### Run the full test suite
 
 ```bash
-cd /home/yqc5929/data_workspace/FiTx/preproc
+cd ~/../preproc
 ./run_test.sh
 ```
 
-## Expected Outputs & Differences
+The test script:
+- builds all examples
+- emits baseline and symbolic IR
+- prints IR summaries and diffs
+- runs generated binaries
 
-- **PC propagation**: `*_pc.c` includes `// PC:` markers that represent presence conditions.
-- **Symbolic IR**: contains both sides of `#ifdef` regions, plus `llvm.var.annotation` calls from `PC_ANNOTATE`.
-- **Struct layout**: `example3_struct` shows struct field differences between baseline and symbolic IR.
-- **Function availability**: `example4_function` shows `foo` missing in baseline when `CONFIG_X` is unset and present symbolically.
-- **Macro wrappers**: `example5_macro` shows call to `refcount_inc` appearing symbolically even if baseline removes it.
+## Example Coverage
+
+1. Alloc/free variation (`example1_alloc_free.c`)
+2. Branch/control variation (`example2_branch.c`)
+3. Struct field variation (`example3_struct.c`)
+4. Function availability (`example4_function.c`)
+5. Macro wrapper variability (`example5_macro.c`)
 
 ## Notes
 
-- Requires `clang` and **Clang/LLVM development libraries** on Linux.
-- `./tools/build_cpp_tools.sh` first tries `llvm-config --libs clangTooling`; if unavailable, it falls back to linking `libclang-cpp` (by full path if no symlink exists).
-- If both fail, install your distro's Clang dev packages (e.g., `libclang-dev`, `clang-tools`).
-- The helper function `__cfg()` ensures symbolic branches are retained in LLVM IR.
+- `build.sh` auto-builds C++ tools when missing or out-of-date.
+- `run_test.sh` defaults to binaries under `build/`.
+- Warnings about missing compilation databases can appear; they do not affect pipeline execution.
