@@ -5,3 +5,4 @@ build/
 log/
 scripts/
 build_log.txt
+.venv/

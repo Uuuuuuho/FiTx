@@ -3,7 +3,7 @@ from pathlib import Path
 import typing
 
 ### CONSTANTS ###
-CLANG = "clang"
+CLANG = "clang-14"
 
 
 ### Util Functions ###
