@@ -1,23 +1,25 @@
-# FiTx Preproc Pipeline (C++/LLVM)
+# FiTx Preproc Pipeline (Clang Plugin Method A)
 
-This directory provides a C++/LLVM-based prototype pipeline for symbolic branch lowering of variational C code with `#ifdef` directives. It builds C++ tools, runs PC (Presence Condition) propagation and symbolic lowering, emits LLVM IR, and compares baseline vs symbolic IR outputs.
+This directory provides a Clang-plugin-based pipeline for symbolic branch lowering of variational C code with `#ifdef` directives. The plugin runs inside the Clang frontend, emits intermediate artifacts (PC-annotated and lowered source), and the pipeline then emits LLVM IR for baseline vs symbolic builds.
 
 ## Directory Structure
 
 ```
 preproc/
+  CMakeLists.txt
   build.sh
   run_test.sh
-  build/
-    emit_ir
-    ir_summary
-    pc_propagation_clang
-    symbolic_lowering_clang
+  header/
+    DirEnum.h
+    PPCapture.h
+    PcLowerPluginAction.h
   src/
-    emit_ir.cpp
+    PPCapture.cpp
+    PcLwoerPluginAction.cpp
     ir_summary.cpp
-    pc_propagation_clang.cpp
-    symbolic_lowering_clang.cpp
+  build/
+    pclower_plugin.so
+    ir_summary
   test/
     example1_alloc_free.c
     example2_branch.c
@@ -28,12 +30,20 @@ preproc/
 
 ## Tools
 
-- `pc_propagation_clang`: Uses Clang frontend callbacks to compute presence conditions and annotate source with `// PC:` markers.
-- `symbolic_lowering_clang`: Lowers `#ifdef` blocks into explicit symbolic branches while keeping both sides.
-- `emit_ir`: Emits LLVM IR via Clang frontend and writes `.ll` files.
+- `pclower_plugin.so`: Clang frontend plugin. It captures `#ifdef` regions and emits:
+  - PC-annotated source (`*_pc.c`)
+  - Lowered symbolic source (`*_symbolic.c`)
 - `ir_summary`: Reads LLVM IR via LLVM API and summarizes functions/structs/calls.
 
 ## Build and Run
+
+### Build tools with CMake
+
+```bash
+cd /home/yqc5929/data_workspace/FiTx/preproc
+cmake -S . -B build
+cmake --build build
+```
 
 ### Build a single example
 
@@ -44,8 +54,8 @@ cd /home/yqc5929/data_workspace/FiTx/preproc
 
 Outputs in `out/example1_alloc_free/`:
 - `*_baseline.ll`: IR from normal preprocessing
-- `*_pc.c`: PC-annotated source
-- `*_symbolic.c`: lowered symbolic source
+- `*_pc.c`: PC-annotated source (from plugin)
+- `*_symbolic.c`: lowered symbolic source (from plugin)
 - `*_symbolic.ll`: symbolic IR
 
 ### Run the full test suite
@@ -69,8 +79,22 @@ The test script:
 4. Function availability (`example4_function.c`)
 5. Macro wrapper variability (`example5_macro.c`)
 
+## Pipeline Steps
+
+1) **Clang plugin pass** (inside Clang frontend)
+- `clang -Xclang -load -Xclang build/pclower_plugin.so -Xclang -plugin -Xclang pclower ...`
+- Emits `*_pc.c` and `*_symbolic.c`
+
+2) **IR emission**
+- Baseline: `clang -S -emit-llvm` on original input
+- Symbolic: `clang -S -emit-llvm` on lowered `*_symbolic.c`
+
+3) **IR summary**
+- `build/ir_summary` prints functions/structs/calls
+
 ## Notes
 
-- `build.sh` auto-builds C++ tools when missing or out-of-date.
+- Tools are built by CMake into `build/`.
+- `build.sh` will invoke CMake if the binaries are missing.
 - `run_test.sh` defaults to binaries under `build/`.
-- Warnings about missing compilation databases can appear; they do not affect pipeline execution.
+- Macro redefinition warnings may appear for the macro-wrapper example; they do not affect correctness.
