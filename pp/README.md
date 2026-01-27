@@ -21,11 +21,7 @@ preproc/
     pclower_plugin.so
     ir_summary
   test/
-    example1_alloc_free.c
-    example2_branch.c
-    example3_struct.c
-    example4_function.c
-    example5_macro.c
+    examples.c
 ```
 
 ## Tools
@@ -40,7 +36,7 @@ preproc/
 ### Build tools with CMake
 
 ```bash
-cd /home/yqc5929/data_workspace/FiTx/preproc
+cd FiTx/preproc
 cmake -S . -B build
 cmake --build build
 ```
@@ -48,11 +44,11 @@ cmake --build build
 ### Build a single example
 
 ```bash
-cd /home/yqc5929/data_workspace/FiTx/preproc
-./build.sh test/example1_alloc_free.c out/example1_alloc_free CONFIG_USB
+cd FiTx/preproc
+./build.sh test/examples.c out/examples CONFIG_USB
 ```
 
-Outputs in `out/example1_alloc_free/`:
+Outputs in `out/examples/`:
 - `*_baseline.ll`: IR from normal preprocessing
 - `*_pc.c`: PC-annotated source (from plugin)
 - `*_symbolic.c`: lowered symbolic source (from plugin)
@@ -78,6 +74,7 @@ The test script:
 3. Struct field variation (`example3_struct.c`)
 4. Function availability (`example4_function.c`)
 5. Macro wrapper variability (`example5_macro.c`)
+6. Others
 
 ## Pipeline Steps
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# This script runs a series of tests for the PCLower tool, compiling example C programs,
+# generating their baseline and symbolically lowered LLVM IR, and executing them.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,6 +24,9 @@ DEFINES[example3_struct]="CONFIG_A,CONFIG_B"
 DEFINES[example4_function]="CONFIG_X"
 DEFINES[example5_macro]="CONFIG_DEBUG"
 DEFINES[example6_multi]="CONFIG_SYNC"
+DEFINES[example7_macro_fn]=""
+DEFINES[example8_nested_macro]="CONFIG_A"
+DEFINES[example9_multi_fn]="CONFIG_A"
 
 declare -A EXAMPLE_SOURCES
 EXAMPLE_SOURCES[example6_multi]="example6_multi_main.c example6_multi_lib.c"
@@ -33,12 +38,27 @@ examples=(
   example4_function
   example5_macro
   example6_multi
+  example7_macro_fn
+  example8_nested_macro
+  example9_multi_fn
+)
+
+ALLOW_NONZERO_RUNS=(
+  example7_macro_fn
+  example9_multi_fn
 )
 
 failures=0
 
 for ex in "${examples[@]}"; do
   echo "==== $ex ===="
+  allow_nonzero=false
+  for ok in "${ALLOW_NONZERO_RUNS[@]}"; do
+    if [[ "$ok" == "$ex" ]]; then
+      allow_nonzero=true
+      break
+    fi
+  done
   SOURCES=()
   if [[ -n "${EXAMPLE_SOURCES[$ex]:-}" ]]; then
     for src in ${EXAMPLE_SOURCES[$ex]}; do
@@ -94,8 +114,13 @@ for ex in "${examples[@]}"; do
   clang -O0 -g -o "$EX_OUT/${ex}_baseline" "${SOURCES[@]}" "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}"
   clang -O0 -g -o "$EX_OUT/${ex}_symbolic" "${SYM_SOURCES[@]}" "${INCLUDE_ARGS[@]}"
 
-  "$EX_OUT/${ex}_baseline" >/dev/null
-  "$EX_OUT/${ex}_symbolic" >/dev/null
+  if $allow_nonzero; then
+    "$EX_OUT/${ex}_baseline" >/dev/null || true
+    "$EX_OUT/${ex}_symbolic" >/dev/null || true
+  else
+    "$EX_OUT/${ex}_baseline" >/dev/null
+    "$EX_OUT/${ex}_symbolic" >/dev/null
+  fi
 
   for idx in "${!BASE_IRS[@]}"; do
     echo "-- IR summary (baseline)"

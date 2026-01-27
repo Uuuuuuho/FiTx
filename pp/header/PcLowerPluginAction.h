@@ -42,18 +42,6 @@ class PcLowerPluginAction final : public clang::PluginASTAction {
     static std::vector<std::string>
     renderLowered(const std::vector<std::string> &lines,
                   const std::map<unsigned, Directive> &directiveMap);
-    static void emitHelper(std::vector<std::string> &out);
-    static std::string indent(int level);
-    static bool inStruct(const std::optional<int> &structDepth, int braceDepth);
-    static bool inTopLevel(const std::optional<int> &structDepth, int braceDepth);
-    static int countChar(const std::string &line, char c);
-    static std::string rtrim(const std::string &s);
-    static bool handleMacroDefine(const std::string &line,
-                    MacroGuard &guard,
-                    std::vector<std::string> &out);
-    static std::string ensureSemicolon(const std::string &body);
-    static void emitMacroGuard(std::vector<std::string> &out,
-                               const MacroGuard &guard);
 };
 
 } // namespace pclower

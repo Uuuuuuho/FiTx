@@ -21,6 +21,25 @@ struct Directive {
 };
 
 struct MacroGuard {
+    struct GuardedFunction {
+        std::string name;
+        std::string prefix;
+        std::string params;
+        std::string ifName;
+        std::string elseName;
+        bool hasIf = false;
+        bool hasElse = false;
+        bool protoEmitted = false;
+    };
+    struct MacroDefine {
+        std::string name;
+        std::string params;
+        std::string ifBody;
+        std::string elseBody;
+        bool functionLike = false;
+        bool ifDefined = false;
+        bool elseDefined = false;
+    };
     std::string macro;
     bool negated = false;
     std::string name;
@@ -29,7 +48,12 @@ struct MacroGuard {
     std::string elseBody;
     bool inElse = false;
     bool hasDefine = false;
+    bool functionLike = false;
+    bool ifDefined = false;
+    bool elseDefined = false;
     std::optional<size_t> ifCommentIndex;
     std::optional<size_t> elseCommentIndex;
+    std::vector<GuardedFunction> functions;
+    std::vector<MacroDefine> extraDefines;
 };
 } // namespace pclower

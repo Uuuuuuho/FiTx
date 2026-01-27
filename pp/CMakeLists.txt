@@ -78,6 +78,7 @@ set(COMMON_LINK_OPTS ${LLVM_LDFLAGS_LIST} ${LLVM_SYSTEM_LIBS_LIST})
 
 add_library(pclower_plugin SHARED
     src/PcLwoerPluginAction.cpp
+    src/LoweredRenderer.cpp
     src/PPCapture.cpp
 )
 
