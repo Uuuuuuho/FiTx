@@ -47,6 +47,7 @@ def linux(target, file, measure):
             if abs_path.is_dir():
                 make_flags.append(f"M={file_path.as_posix()}")
                 make_flags.append("modules")
+                make_flags.append("WERROR=0")
             else:
                 if abs_path.suffix == '.c':
                     make_flags.append(str(file_path.with_suffix('.o')))
