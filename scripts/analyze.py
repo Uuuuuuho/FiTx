@@ -61,7 +61,7 @@ def linux(target, file, measure):
                 subprocess.run(['rm', target_file])
 
         command = utils.make_linux_build_command(
-                target, multiprocessing.cpu_count(), compiler_flags, make_flags)
+                target, multiprocessing.cpu_count()-1, compiler_flags, make_flags)
 
         # Start analysis
         start = time.time()

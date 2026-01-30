@@ -3,8 +3,11 @@ compile_commands.json
 linux/
 build/
 log/
-scripts/
+scripts/FiTx/
+script/config
 build_log.txt
 .venv/
 *lower*.c
 out/
+pp/scripts/compile_db_filter.py
+pp/scripts/kbuild_cmd_extract.py

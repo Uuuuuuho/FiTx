@@ -12,8 +12,9 @@ if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
 fi
 
 LINUX_ROOT_ARG="${1:-/home/yqc5929/data_workspace/linux}"
-TARGET_SUBDIR="${2:-drivers/usb}"
+TARGET_SUBDIR="${2:-drivers/net/ethernet/intel/}"
 OUTDIR="${3:-$ROOT_DIR/driver_out}"
+JOBS="${JOBS:-${4:-4}}"
 mkdir -p "$OUTDIR"
 
 "$ROOT_DIR/build.sh"
@@ -150,7 +151,7 @@ if [[ "$HAS_STD" == false ]]; then
 fi
 EXTRA_CLANG_ARGS+=("-Wno-implicit-function-declaration")
 
-PLUGIN_PATH="$ROOT_DIR/$TOOLS_BIN/pclower_plugin.so"
+PLUGIN_PATH="$ROOT_DIR/$TOOLS_BIN/libPcLower.so"
 
 if [[ -n "$TARGET_FILE" ]]; then
   SOURCES=("$TARGET_FILE")
@@ -163,45 +164,72 @@ if [[ ${#SOURCES[@]} -eq 0 ]]; then
   exit 1
 fi
 
-for INPUT in "${SOURCES[@]}"; do
-  REL_PATH="${INPUT#$TARGET_DIR/}"
-  if [[ -n "$TARGET_FILE" ]]; then
-    REL_DIR="."
+if [[ -z "${JOBS:-}" ]]; then
+  if command -v nproc >/dev/null 2>&1; then
+    JOBS="$(nproc)"
   else
-    REL_DIR="$(dirname "$REL_PATH")"
+    JOBS=1
   fi
-  BASE_NAME="$(basename "$INPUT" .c)"
-  FILE_DIR="$(dirname "$INPUT")"
-  FILE_INCLUDE_ARGS=("${AUTO_INCLUDE_ARGS[@]}" "-I$FILE_DIR")
+fi
+if [[ "$JOBS" -lt 1 ]]; then
+  JOBS=1
+fi
 
-  EX_OUT="$OUTDIR/$TARGET_OUT_REL/$REL_DIR"
-  mkdir -p "$EX_OUT"
+run_one() {
+  local input="$1"
+  local rel_path rel_dir base_name file_dir ex_out sym_c sym_ir
 
-  SYM_C="$EX_OUT/${BASE_NAME}_symbolic.c"
-  SYM_IR="$EX_OUT/${BASE_NAME}_symbolic.ll"
+  rel_path="${input#$TARGET_DIR/}"
+  if [[ -n "$TARGET_FILE" ]]; then
+    rel_dir="."
+  else
+    rel_dir="$(dirname "$rel_path")"
+  fi
+  base_name="$(basename "$input" .c)"
+  file_dir="$(dirname "$input")"
+  local file_include_args=("${AUTO_INCLUDE_ARGS[@]}" "-I$file_dir")
 
-  if ! clang -fsyntax-only "${FILE_INCLUDE_ARGS[@]}" "${KERNEL_ARGS[@]}" "${EXTRA_CLANG_ARGS[@]}" \
-    "$INPUT" >/dev/null; then
-    echo "Skip (headers): $INPUT" >&2
-    continue
+  ex_out="$OUTDIR/$TARGET_OUT_REL/$rel_dir"
+  mkdir -p "$ex_out"
+
+  sym_c="$ex_out/${base_name}_symbolic.c"
+  sym_ir="$ex_out/${base_name}_symbolic.ll"
+
+  if [[ -s "$sym_ir" ]]; then
+    echo "Skip (done): $sym_ir"
+    return 0
   fi
 
-  if ! clang -fsyntax-only "${FILE_INCLUDE_ARGS[@]}" "${KERNEL_ARGS[@]}" "${EXTRA_CLANG_ARGS[@]}" \
+  if ! clang -fsyntax-only "${file_include_args[@]}" "${KERNEL_ARGS[@]}" "${EXTRA_CLANG_ARGS[@]}" \
+    "$input" >/dev/null; then
+    echo "Skip (headers): $input" >&2
+    return 0
+  fi
+
+  if ! clang -fsyntax-only "${file_include_args[@]}" "${KERNEL_ARGS[@]}" "${EXTRA_CLANG_ARGS[@]}" \
     -Xclang -load -Xclang "$PLUGIN_PATH" \
     -Xclang -plugin -Xclang pclower \
-    -Xclang -plugin-arg-pclower -Xclang "lowered-out=$SYM_C" \
+    -Xclang -plugin-arg-pclower -Xclang "lowered-out=$sym_c" \
     ${PCLower_ARGS[@]/#/-Xclang -plugin-arg-pclower -Xclang } \
-    "$INPUT" >/dev/null; then
-    echo "Skip (plugin): $INPUT" >&2
-    continue
+    "$input" >/dev/null; then
+    echo "Skip (plugin): $input" >&2
+    return 0
   fi
 
-  if ! clang -S -emit-llvm -O0 -g "${FILE_INCLUDE_ARGS[@]}" "${KERNEL_ARGS[@]}" "${EXTRA_CLANG_ARGS[@]}" "$SYM_C" -o "$SYM_IR"; then
-    echo "Skip IR: $SYM_C" >&2
-    continue
+  if ! clang -S -emit-llvm -O0 -g "${file_include_args[@]}" "${KERNEL_ARGS[@]}" "${EXTRA_CLANG_ARGS[@]}" "$sym_c" -o "$sym_ir"; then
+    echo "Skip IR: $sym_c" >&2
+    return 0
   fi
 
-  echo "Symbolic IR: $SYM_IR"
+  echo "Symbolic IR: $sym_ir"
+}
+
+for INPUT in "${SOURCES[@]}"; do
+  while (( $(jobs -rp | wc -l) >= JOBS )); do
+    sleep 0.1
+  done
+  run_one "$INPUT" &
 done
+wait
 
 echo "All transforms completed."

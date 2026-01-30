@@ -10,6 +10,9 @@ TOOLS_BIN="${TOOLS_BIN:-build}"
 OUTDIR="$ROOT_DIR/out"
 mkdir -p "$OUTDIR"
 
+# Use CLANG_BIN so we can force clang-14 in the environment
+CLANG_BIN="${CLANG_BIN:-clang-14}"
+
 "$ROOT_DIR/build.sh"
 
 PCLower_ARGS=()
@@ -83,7 +86,7 @@ for ex in "${examples[@]}"; do
   fi
   INCLUDE_ARGS=("-I$ROOT_DIR/test")
 
-  PLUGIN_PATH="$ROOT_DIR/$TOOLS_BIN/pclower_plugin.so"
+  PLUGIN_PATH="$ROOT_DIR/$TOOLS_BIN/libPcLower.so"
 
   for INPUT in "${SOURCES[@]}"; do
     BASENAME="$(basename "$INPUT" .c)"
@@ -92,7 +95,7 @@ for ex in "${examples[@]}"; do
     SYM_IR="$EX_OUT/${BASENAME}_symbolic.ll"
     PC_C="$EX_OUT/${BASENAME}_pc.c"
 
-    clang -fsyntax-only "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}" \
+    "$CLANG_BIN" -fsyntax-only "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}" \
       -Xclang -load -Xclang "$PLUGIN_PATH" \
       -Xclang -plugin -Xclang pclower \
       -Xclang -plugin-arg-pclower -Xclang "pc-out=$PC_C" \
@@ -100,8 +103,8 @@ for ex in "${examples[@]}"; do
       ${PCLower_ARGS[@]/#/-Xclang -plugin-arg-pclower -Xclang } \
       "$INPUT" >/dev/null
 
-    clang -S -emit-llvm -O0 -g "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}" "$INPUT" -o "$BASE_IR"
-    clang -S -emit-llvm -O0 -g "${INCLUDE_ARGS[@]}" "$SYM_C" -o "$SYM_IR"
+    "$CLANG_BIN" -S -emit-llvm -O0 -g "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}" "$INPUT" -o "$BASE_IR"
+    "$CLANG_BIN" -S -emit-llvm -O0 -g "${INCLUDE_ARGS[@]}" "$SYM_C" -o "$SYM_IR"
 
     SYM_SOURCES+=("$SYM_C")
     BASE_IRS+=("$BASE_IR")
@@ -111,8 +114,8 @@ for ex in "${examples[@]}"; do
     echo "Symbolic IR: $SYM_IR"
   done
 
-  clang -O0 -g -o "$EX_OUT/${ex}_baseline" "${SOURCES[@]}" "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}"
-  clang -O0 -g -o "$EX_OUT/${ex}_symbolic" "${SYM_SOURCES[@]}" "${INCLUDE_ARGS[@]}"
+  "$CLANG_BIN" -O0 -g -o "$EX_OUT/${ex}_baseline" "${SOURCES[@]}" "${DEFINE_ARGS[@]}" "${INCLUDE_ARGS[@]}"
+  "$CLANG_BIN" -O0 -g -o "$EX_OUT/${ex}_symbolic" "${SYM_SOURCES[@]}" "${INCLUDE_ARGS[@]}"
 
   if $allow_nonzero; then
     "$EX_OUT/${ex}_baseline" >/dev/null || true

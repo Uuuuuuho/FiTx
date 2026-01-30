@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-find_program(LLVM_CONFIG llvm-config REQUIRED)
+find_program(LLVM_CONFIG llvm-config-14 llvm-config REQUIRED)
 
 execute_process(COMMAND ${LLVM_CONFIG} --includedir
                 OUTPUT_VARIABLE LLVM_INCLUDE_DIR
@@ -45,6 +45,13 @@ execute_process(
 
 set(CLANG_CPP_LIB "" CACHE FILEPATH "Path to libclang-cpp")
 
+# If the system has libclang-cpp.so.14 installed, prefer it explicitly.
+if(NOT CLANG_CPP_LIB AND EXISTS "/lib/x86_64-linux-gnu/libclang-cpp.so.14")
+    set(CLANG_CPP_LIB "/lib/x86_64-linux-gnu/libclang-cpp.so.14")
+elseif(NOT CLANG_CPP_LIB AND EXISTS "/usr/lib/llvm-14/lib/libclang-cpp.so.14")
+    set(CLANG_CPP_LIB "/usr/lib/llvm-14/lib/libclang-cpp.so.14")
+endif()
+
 if(CLANG_LIBS_STATUS EQUAL 0)
     separate_arguments(CLANG_LIBS_LIST NATIVE_COMMAND "${CLANG_LIBS}")
     set(CLANG_LINK_LIBS ${CLANG_LIBS_LIST})
@@ -58,11 +65,20 @@ else()
             PATH_SUFFIXES llvm lib)
     endif()
     if(NOT CLANG_CPP_LIB)
-        execute_process(
-            COMMAND sh -c "ldconfig -p | grep -m1 'libclang-cpp.so' | awk '{print \$NF}'"
-            OUTPUT_VARIABLE CLANG_CPP_LIB
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            RESULT_VARIABLE LD_STATUS)
+        # Prefer libclang-cpp.so.14 when available (matching clang-14)
+        if(EXISTS "/usr/lib/llvm-14/lib/libclang-cpp.so.14")
+            set(CLANG_CPP_LIB "/usr/lib/llvm-14/lib/libclang-cpp.so.14")
+        elseif(EXISTS "/lib/x86_64-linux-gnu/libclang-cpp.so.14")
+            set(CLANG_CPP_LIB "/lib/x86_64-linux-gnu/libclang-cpp.so.14")
+        elseif(EXISTS "/usr/lib/libclang-cpp.so.14")
+            set(CLANG_CPP_LIB "/usr/lib/libclang-cpp.so.14")
+        else()
+            execute_process(
+                COMMAND sh -c "ldconfig -p | grep -m1 'libclang-cpp.so' | awk '{print \$NF}'"
+                OUTPUT_VARIABLE CLANG_CPP_LIB
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                RESULT_VARIABLE LD_STATUS)
+        endif()
         if(NOT LD_STATUS EQUAL 0)
             set(CLANG_CPP_LIB "")
         endif()
@@ -73,49 +89,38 @@ else()
     set(CLANG_LINK_LIBS ${CLANG_CPP_LIB})
 endif()
 
-set(COMMON_COMPILE_OPTS ${LLVM_CXXFLAGS_LIST})
+## Filter out any -std= flags from llvm-config cxxflags so we can control the standard
+set(FILTERED_LLVM_CXXFLAGS)
+foreach(_flag ${LLVM_CXXFLAGS_LIST})
+    if(NOT _flag MATCHES "^-std=")
+        list(APPEND FILTERED_LLVM_CXXFLAGS ${_flag})
+    endif()
+endforeach()
+set(COMMON_COMPILE_OPTS ${FILTERED_LLVM_CXXFLAGS})
 set(COMMON_LINK_OPTS ${LLVM_LDFLAGS_LIST} ${LLVM_SYSTEM_LIBS_LIST})
 
-add_library(pclower_plugin SHARED
-    src/PcLwoerPluginAction.cpp
+add_library(PcLower SHARED
+    src/PcLowerPluginAction.cpp
     src/LoweredRenderer.cpp
     src/PPCapture.cpp
 )
 
-target_include_directories(pclower_plugin PRIVATE
+# Enforce C++17 for the plugin target (guard against llvm-config cxxflags overriding)
+target_compile_features(PcLower PUBLIC cxx_std_17)
+target_compile_options(PcLower PRIVATE -std=c++17)
+
+target_include_directories(PcLower PRIVATE
     ${LLVM_INCLUDE_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/header
 )
 
-target_compile_options(pclower_plugin PRIVATE ${COMMON_COMPILE_OPTS})
+target_compile_options(PcLower PRIVATE ${COMMON_COMPILE_OPTS})
+# Apply -std=c++17 last so it overrides any earlier -std flags
+target_compile_options(PcLower PRIVATE -std=c++17)
 
-target_link_options(pclower_plugin PRIVATE ${COMMON_LINK_OPTS})
+target_link_options(PcLower PRIVATE ${COMMON_LINK_OPTS})
 
-target_link_libraries(pclower_plugin PRIVATE
+target_link_libraries(PcLower PRIVATE
     ${CLANG_LINK_LIBS}
     ${LLVM_CORE_LIBS_LIST}
-)
-
-set_target_properties(pclower_plugin PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "pclower_plugin"
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-
-add_executable(ir_summary src/ir_summary.cpp)
-
-target_include_directories(ir_summary PRIVATE
-    ${LLVM_INCLUDE_DIR}
-)
-
-target_compile_options(ir_summary PRIVATE ${COMMON_COMPILE_OPTS})
-
-target_link_options(ir_summary PRIVATE ${COMMON_LINK_OPTS})
-
-target_link_libraries(ir_summary PRIVATE
-    ${LLVM_IR_LIBS_LIST}
-)
-
-set_target_properties(ir_summary PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )

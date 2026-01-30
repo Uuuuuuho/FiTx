@@ -1,0 +1,3 @@
+[submodule "superc"]
+	path = superc
+	url = https://github.com/appleseedlab/superc.git
