@@ -100,6 +100,7 @@ for ex in "${examples[@]}"; do
       -Xclang -plugin -Xclang pclower \
       -Xclang -plugin-arg-pclower -Xclang "pc-out=$PC_C" \
       -Xclang -plugin-arg-pclower -Xclang "lowered-out=$SYM_C" \
+      -Xclang -plugin-arg-pclower -Xclang "lowered-overwrite" \
       ${PCLower_ARGS[@]/#/-Xclang -plugin-arg-pclower -Xclang } \
       "$INPUT" >/dev/null
 

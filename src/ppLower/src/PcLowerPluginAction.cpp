@@ -18,6 +18,10 @@ bool PcLowerPluginAction::ParseArgs(const clang::CompilerInstance &,
             emitPc_ = true;
         } else if (arg.rfind("lowered-out=", 0) == 0) {
             loweredOut_ = arg.substr(std::string("lowered-out=").size());
+        } else if (arg.rfind("lowered-dir=", 0) == 0) {
+            loweredDir_ = arg.substr(std::string("lowered-dir=").size());
+        } else if (arg == "lowered-overwrite") {
+            overwriteLowered_ = true;
         } else if (arg == "lowered-off") {
             emitLowered_ = false;
         } else if (arg == "lowered-on") {
@@ -35,9 +39,17 @@ PcLowerPluginAction::CreateASTConsumer(clang::CompilerInstance &ci,
     return std::make_unique<clang::ASTConsumer>();
 }
 
+// void PcLowerPluginAction::EndSourceFileAction() {
+void PcLowerPluginAction::EndSourceFileAction_orig() {
+    // Test dummy 
+}
+
+// void PcLowerPluginAction::EndSourceFileAction_orig() {
 void PcLowerPluginAction::EndSourceFileAction() {
     clang::SourceManager &sm = getCompilerInstance().getSourceManager();
     clang::FileID mainFile = sm.getMainFileID();
+    const clang::FileEntry *entry = sm.getFileEntryForID(mainFile);
+    const std::string mainPath = entry ? entry->getName().str() : "";
     auto buffer = sm.getBufferData(mainFile);
 
     std::vector<std::string> lines;
@@ -56,7 +68,21 @@ void PcLowerPluginAction::EndSourceFileAction() {
         auto pc = renderPC(lines, directiveMap);
         writeFile(pcOut_, pc);
     }
-    if (emitLowered_ && !loweredOut_.empty()) { // debug for lowered rendering
+    if (emitLowered_) { // debug for lowered rendering
+        if (loweredOut_.empty() && !loweredDir_.empty() && !mainPath.empty()) {
+            std::string base = mainPath;
+            for (auto &ch : base) {
+                if (ch == '/') {
+                    ch = '_';
+                }
+            }
+            loweredOut_ = loweredDir_ + "/" + base;
+        }
+        if (loweredOut_.empty() && overwriteLowered_ && !mainPath.empty()) {
+            loweredOut_ = mainPath;
+        }
+    }
+    if (emitLowered_ && !loweredOut_.empty()) {
         auto lowered = renderLowered(lines, directiveMap);
         writeFile(loweredOut_, lowered);
     }

@@ -24,12 +24,15 @@ class PcLowerPluginAction final : public clang::PluginASTAction {
     CreateASTConsumer(clang::CompilerInstance &ci,
                       llvm::StringRef) override;
     void EndSourceFileAction() override;
+    void EndSourceFileAction_orig();
 
   private:
     bool emitPc_ = true;
     bool emitLowered_ = true;
+    bool overwriteLowered_ = false;
     std::string pcOut_;
     std::string loweredOut_;
+    std::string loweredDir_;
     std::vector<Directive> directives_;
 
     static void writeFile(const std::string &path,
