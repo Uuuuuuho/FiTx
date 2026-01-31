@@ -159,8 +159,8 @@ void InactiveCodeConsumer::HandleTranslationUnit(ASTContext &Context) {
     if (!Block.Condition.empty())
       OS << " condition=" << Block.Condition;
     // Add code content as annotation metadata
-    if (!Block.Content.empty())
-      OS << " code=" << Block.Content;
+    // if (!Block.Content.empty())
+    //   OS << " code=" << Block.Content;
     OS.flush();
 
     if (Containing) {

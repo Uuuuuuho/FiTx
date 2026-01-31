@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.1)
 
+# Prefer clang/llvm-14 when available.
+if(EXISTS "/usr/lib/llvm-14/lib/cmake/llvm" AND EXISTS "/usr/lib/llvm-14/lib/cmake/clang")
+  set(LLVM_DIR "/usr/lib/llvm-14/lib/cmake/llvm")
+  set(Clang_DIR "/usr/lib/llvm-14/lib/cmake/clang")
+endif()
+
 find_package(Clang REQUIRED CONFIG)
 
 add_library(Annotator MODULE

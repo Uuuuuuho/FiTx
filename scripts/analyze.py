@@ -17,26 +17,48 @@ LOG_DIR       = os.path.abspath("./log")
 BUILD_DIR     = os.path.join(FITX_ROOT, 'build')
 DETECTOR_PATH = os.path.join(BUILD_DIR, 'detector', 'all_detector',
                              'libAllDetectorMod.so')
+PP_ANNOTATOR_PATH = os.path.join(BUILD_DIR, 'ppAnnotator', 'libAnnotator.so')
 
 @click.group()
 def commands():
     pass
 
+def ExecAnnotator(make_flags):
+    # Discard all local changes in the linux tree before running annotator
+    try:
+        subprocess.run(["git", "-C", LINUX_ROOT, "restore", "."], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: failed to discard git changes in {LINUX_ROOT}: {e}")
+
+    compiler_flags = [
+        "-Xclang", "-load", "-Xclang", PP_ANNOTATOR_PATH,
+        "-Xclang", "-plugin", "-Xclang", "annotator",
+        "-Xclang", "-plugin-arg-annotator", "-Xclang", "rewrite",
+    ]
+    command = utils.make_linux_build_command(
+        LINUX_ROOT, multiprocessing.cpu_count()-1, compiler_flags, make_flags)
+    env = os.environ.copy()
+    result = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, env=env)
 
 @commands.command()
 @click.option("--target", "-t", default=LINUX_ROOT)
 @click.option("--file", "-f", default=None)
 @click.option("--measure", "-m", is_flag=True)
-def linux(target, file, measure):
+@click.option("--annotator", is_flag=True, help="Enable ppAnnotator plugin (loads pp/libAnnotator.so)")
+def linux(target, file, measure, annotator):
     print(f"Start running analyzer")
     os.makedirs(LOG_DIR, exist_ok=True)
     tmplog = os.path.join(LOG_DIR, "tmplog")
     current = datetime.datetime.now().strftime('%Y_%m_%d_%H:%M')
     log = os.path.join(LOG_DIR, f"{current}.log")
     with open(tmplog, 'w+') as f:
-        compiler_flags = ["-Xclang", "-load", "-Xclang", DETECTOR_PATH, "-flegacy-pass-manager"]
-        make_flags = []
+        compiler_flags = [
+            "-Xclang", "-load", "-Xclang", DETECTOR_PATH, "-flegacy-pass-manager",
+            "-Wno-error=address-of-packed-member", "-Wno-address-of-packed-member",
+            "-DCC_USING_FENTRY",
+        ]
 
+        make_flags = []
         if measure:
             compiler_flags += ["-mllvm", "-measure"]
 
@@ -61,12 +83,20 @@ def linux(target, file, measure):
             if os.path.isfile(target_file):
                 subprocess.run(['rm', target_file])
 
+        # Optionally load the ppAnnotator plugin (rewrite in-place to embed annotations)
+        if annotator:
+            if os.path.exists(PP_ANNOTATOR_PATH):
+                ExecAnnotator(make_flags)
+            else:
+                print(f"Warning: ppAnnotator not found at {PP_ANNOTATOR_PATH}; continuing without annotator")
+
         command = utils.make_linux_build_command(
                 target, multiprocessing.cpu_count()-1, compiler_flags, make_flags)
 
         # Start analysis
         start = time.time()
-        result = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
+        env = os.environ.copy()
+        result = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, env=env)
         log_output = []
         stderr_lines = []
         with open(log, 'w+') as log_file:
@@ -82,7 +112,7 @@ def linux(target, file, measure):
             retry_flags = [f"M={file_path.parent.as_posix()}", "modules"]
             retry_command = utils.make_linux_build_command(
                 target, multiprocessing.cpu_count(), compiler_flags, retry_flags)
-            retry = subprocess.Popen(retry_command, stderr=subprocess.PIPE, text=True)
+            retry = subprocess.Popen(retry_command, stderr=subprocess.PIPE, text=True, env=env)
             with open(log, 'a') as log_file:
                 for line in retry.stderr:
                     f.write(line)
@@ -122,11 +152,21 @@ def linux(target, file, measure):
 
 
 @commands.command()
+@click.option("--annotator", is_flag=True, help="Enable ppAnnotator plugin for test compiles")
 @click.argument("target", type=click.Path(exists=True))
-def test(target):
+def test(annotator, target):
     print(f"Running test on {target}")
     target_files = utils.get_files(Path(target))
     additional_flags = ["-Xclang", "-load", "-Xclang", DETECTOR_PATH]
+    if annotator:
+        if os.path.exists(PP_ANNOTATOR_PATH):
+            additional_flags += [
+                "-Xclang", "-load", "-Xclang", PP_ANNOTATOR_PATH,
+                "-Xclang", "-plugin", "-Xclang", "annotator",
+                "-Xclang", "-plugin-arg-annotator", "-Xclang", "rewrite",
+            ]
+        else:
+            print(f"Warning: ppAnnotator not found at {PP_ANNOTATOR_PATH}; continuing without annotator")
 
     tmplog = os.path.join(LOG_DIR, "tmplog")
     current = datetime.datetime.now().strftime('%Y_%m_%d_%H:%M')
